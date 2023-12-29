@@ -1,0 +1,9 @@
+layout {
+    pane split_direction="vertical" {
+        pane {
+            plugin location="file:target/wasm32-wasi/debug/zj-docker-compose.wasm" {
+            }
+        }
+    }
+
+}
