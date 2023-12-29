@@ -49,10 +49,18 @@ impl ZellijPlugin for State {
     fn update(&mut self, event: Event) -> bool {
         let mut should_render = false;
         match event {
-            Event::RunCommandResult(status_code, stdout, stderr, _context) => {
+            Event::RunCommandResult(status_code, stdout, stderr, context) => {
                 if status_code != Some(0) {
                     self.error_message = Some(String::from_utf8(stderr).unwrap());
                     return true;
+                }
+
+                if context.get("command") == Some(&"stop".to_owned()) {
+                    docker::request_docker_containers();
+                    return false;
+                }
+                if context.get("command") != Some(&"ps".to_owned()) {
+                    return false;
                 }
 
                 self.containers =
@@ -107,6 +115,11 @@ impl ZellijPlugin for State {
                 Key::Ctrl('r') => {
                     docker::request_docker_containers();
                     self.containers_loading = true;
+                }
+                Key::Ctrl('c') => {
+                    if let Some(ref container) = self.selected_container {
+                        docker::close_container(container);
+                    }
                 }
                 Key::Backspace => {
                     if self.search_query.is_empty() {
@@ -249,10 +262,16 @@ struct KeyBindHelp {
 
 fn print_help(rows: usize) {
     let prefix = "Help: ";
-    let bindings = vec![KeyBindHelp {
-        key: String::from("Ctrl-r"),
-        description: String::from("Refresh"),
-    }];
+    let bindings = vec![
+        KeyBindHelp {
+            key: String::from("Ctrl-r"),
+            description: String::from("Refresh"),
+        },
+        KeyBindHelp {
+            key: String::from("Ctrl-c"),
+            description: String::from("Stop"),
+        },
+    ];
 
     let mut color_ranges: Vec<_> = vec![];
     let mut pos: usize = prefix.len();

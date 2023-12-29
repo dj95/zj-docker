@@ -3,7 +3,8 @@ use std::collections::{BTreeMap, HashMap};
 use zellij_tile::prelude::*;
 
 pub fn request_docker_containers() {
-    let context: BTreeMap<String, String> = BTreeMap::new();
+    let context: BTreeMap<String, String> =
+        BTreeMap::from([("command".to_owned(), "ps".to_owned())]);
 
     run_command(&["docker", "ps", "--format", "json"], context);
 }
@@ -22,4 +23,10 @@ pub fn open_container(container: &str) {
         "docker",
         vec!["logs", "-f", container],
     ));
+}
+
+pub fn close_container(container: &str) {
+    let context: BTreeMap<String, String> =
+        BTreeMap::from([("command".to_owned(), "stop".to_owned())]);
+    run_command(&["docker", "stop", container], context);
 }
