@@ -1,6 +1,7 @@
 use rust_fuzzy_search::fuzzy_search;
 use zellij_tile::prelude::*;
 
+use docker::Container;
 use std::collections::BTreeMap;
 
 mod docker;
@@ -9,8 +10,8 @@ mod docker;
 struct State {
     error_message: Option<String>,
     init: bool,
-    containers: Vec<String>,
-    filtered_containers: Vec<String>,
+    containers: Vec<Container>,
+    filtered_containers: Vec<Container>,
     search_query: String,
     containers_loading: bool,
     selected_container: Option<String>,
@@ -74,7 +75,7 @@ impl ZellijPlugin for State {
                     let container_index = self
                         .filtered_containers
                         .iter()
-                        .position(|c| Some(c) == self.selected_container.as_ref())
+                        .position(|c| Some(c.name.clone()) == self.selected_container)
                         .unwrap_or(0);
 
                     if container_index == 0 {
@@ -84,8 +85,9 @@ impl ZellijPlugin for State {
                     self.selected_container = Some(
                         self.filtered_containers
                             .get(container_index - 1)
-                            .unwrap_or(&String::from(""))
-                            .to_owned(),
+                            .unwrap_or(&Default::default())
+                            .to_owned()
+                            .name,
                     );
 
                     should_render = true;
@@ -94,7 +96,7 @@ impl ZellijPlugin for State {
                     let container_index = self
                         .filtered_containers
                         .iter()
-                        .position(|c| Some(c) == self.selected_container.as_ref())
+                        .position(|c| Some(c.name.clone()) == self.selected_container)
                         .unwrap_or(0);
 
                     if self.filtered_containers.is_empty()
@@ -106,8 +108,9 @@ impl ZellijPlugin for State {
                     self.selected_container = Some(
                         self.filtered_containers
                             .get(container_index + 1)
-                            .unwrap_or(&String::from(""))
-                            .to_owned(),
+                            .unwrap_or(&Default::default())
+                            .to_owned()
+                            .name,
                     );
 
                     should_render = true;
@@ -172,7 +175,7 @@ impl ZellijPlugin for State {
             let mapped_containers = self
                 .containers
                 .iter()
-                .map(String::as_ref)
+                .map(|c| c.name.as_ref())
                 .collect::<Vec<&str>>();
 
             let mut filtered_containers = fuzzy_search(&self.search_query, &mapped_containers);
@@ -185,10 +188,17 @@ impl ZellijPlugin for State {
 
             filtered_containers.reverse();
 
-            self.filtered_containers = filtered_containers
+            let filtered_containers = filtered_containers
                 .iter()
                 .filter(|(_, score)| *score > 0.0)
                 .map(|(c, _)| c.to_string())
+                .collect::<Vec<String>>();
+
+            self.filtered_containers = self
+                .containers
+                .clone()
+                .into_iter()
+                .filter(|c| filtered_containers.contains(&c.name))
                 .collect();
 
             eprintln!("Filtered containers: {:?}", filtered_containers);
@@ -207,13 +217,18 @@ impl ZellijPlugin for State {
             self.selected_container
                 .clone()
                 .unwrap_or(match self.filtered_containers.first() {
-                    Some(container) => container.to_owned(),
+                    Some(container) => container.name.to_owned(),
                     None => String::from(""),
                 });
 
-        if !self.filtered_containers.contains(&selected_container) {
+        if self
+            .filtered_containers
+            .iter()
+            .find(|c| c.name == selected_container)
+            .is_none()
+        {
             selected_container = match self.filtered_containers.first().cloned() {
-                Some(container) => container.to_owned(),
+                Some(container) => container.name.to_owned(),
                 None => String::from(""),
             };
         }
@@ -228,10 +243,10 @@ impl ZellijPlugin for State {
             .filtered_containers
             .iter()
             .map(|c| {
-                if *c == selected_container {
-                    return NestedListItem::new(c).selected();
+                if *c.name == selected_container {
+                    return NestedListItem::new(&c.name).selected();
                 }
-                NestedListItem::new(c)
+                NestedListItem::new(&c.name)
             })
             .collect();
 
