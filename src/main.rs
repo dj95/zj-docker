@@ -205,7 +205,11 @@ impl ZellijPlugin for State {
             };
         }
 
-        eprintln!("Selected container: {:?}", selected_container);
+        if self.selected_container.is_none() && !selected_container.is_empty() {
+            self.selected_container = Some(selected_container.clone());
+        }
+
+        eprintln!("Selected container: {:?}", self.selected_container);
 
         let items: Vec<NestedListItem> = self
             .filtered_containers
