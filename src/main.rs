@@ -1,3 +1,4 @@
+use rust_fuzzy_search::fuzzy_search;
 use zellij_tile::prelude::*;
 
 use std::collections::BTreeMap;
@@ -9,7 +10,10 @@ struct State {
     error_message: Option<String>,
     init: bool,
     containers: Vec<String>,
+    filtered_containers: Vec<String>,
+    search_query: String,
     containers_loading: bool,
+    selected_container: Option<String>,
     userspace_configuration: BTreeMap<String, String>,
 }
 
@@ -22,6 +26,8 @@ impl ZellijPlugin for State {
         self.containers = vec![];
         self.containers_loading = false;
         self.init = false;
+        self.search_query = "".to_owned();
+        self.filtered_containers = vec![];
 
         // we need the ReadApplicationState permission to receive the ModeUpdate and TabUpdate
         // events
@@ -56,14 +62,79 @@ impl ZellijPlugin for State {
                 should_render = true;
             }
             Event::Key(key) => match key {
-                Key::Char('q') => {
-                    close_focus();
+                Key::Up => {
+                    let container_index = self
+                        .filtered_containers
+                        .iter()
+                        .position(|c| Some(c) == self.selected_container.as_ref())
+                        .unwrap_or(0);
+
+                    if container_index == 0 {
+                        return false;
+                    }
+
+                    self.selected_container = Some(
+                        self.filtered_containers
+                            .get(container_index - 1)
+                            .unwrap_or(&String::from(""))
+                            .to_owned(),
+                    );
+
+                    should_render = true;
                 }
-                Key::Char('r') => {
+                Key::Down => {
+                    let container_index = self
+                        .filtered_containers
+                        .iter()
+                        .position(|c| Some(c) == self.selected_container.as_ref())
+                        .unwrap_or(0);
+
+                    if self.filtered_containers.is_empty()
+                        || container_index == self.filtered_containers.len() - 1
+                    {
+                        return false;
+                    }
+
+                    self.selected_container = Some(
+                        self.filtered_containers
+                            .get(container_index + 1)
+                            .unwrap_or(&String::from(""))
+                            .to_owned(),
+                    );
+
+                    should_render = true;
+                }
+                Key::Ctrl('r') => {
                     docker::request_docker_containers();
                     self.containers_loading = true;
                 }
-                _ => (),
+                Key::Backspace => {
+                    if self.search_query.is_empty() {
+                        return false;
+                    }
+
+                    self.search_query = self
+                        .search_query
+                        .chars()
+                        .take(self.search_query.len() - 1)
+                        .collect();
+
+                    should_render = true;
+                }
+                Key::Char(c) => match c {
+                    '\n' => {
+                        if let Some(ref container) = self.selected_container {
+                            docker::open_container(container);
+                        }
+                    }
+                    _ => {
+                        self.search_query = self.search_query.clone() + &c.to_string();
+                        should_render = true;
+                    }
+                },
+                _ => {
+                    eprintln!("Key pressed: {:?}", key);
+                }
             },
             _ => (),
         };
@@ -84,6 +155,34 @@ impl ZellijPlugin for State {
             return;
         }
 
+        if !self.search_query.is_empty() {
+            let mapped_containers = self
+                .containers
+                .iter()
+                .map(String::as_ref)
+                .collect::<Vec<&str>>();
+
+            let mut filtered_containers = fuzzy_search(&self.search_query, &mapped_containers);
+
+            filtered_containers.sort_by(|(_, a_score), (_, b_score)| {
+                a_score
+                    .partial_cmp(b_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+            filtered_containers.reverse();
+
+            self.filtered_containers = filtered_containers
+                .iter()
+                .filter(|(_, score)| *score > 0.0)
+                .map(|(c, _)| c.to_string())
+                .collect();
+
+            eprintln!("Filtered containers: {:?}", filtered_containers);
+        } else {
+            self.filtered_containers = self.containers.clone();
+        }
+
         if !self.init && !self.containers_loading {
             eprintln!("Loading containers...");
             docker::request_docker_containers();
@@ -91,16 +190,50 @@ impl ZellijPlugin for State {
             self.init = true;
         }
 
-        let items: Vec<NestedListItem> = self.containers.iter().map(NestedListItem::new).collect();
+        let mut selected_container =
+            self.selected_container
+                .clone()
+                .unwrap_or(match self.filtered_containers.first() {
+                    Some(container) => container.to_owned(),
+                    None => String::from(""),
+                });
+
+        if !self.filtered_containers.contains(&selected_container) {
+            selected_container = match self.filtered_containers.first().cloned() {
+                Some(container) => container.to_owned(),
+                None => String::from(""),
+            };
+        }
+
+        eprintln!("Selected container: {:?}", selected_container);
+
+        let items: Vec<NestedListItem> = self
+            .filtered_containers
+            .iter()
+            .map(|c| {
+                if *c == selected_container {
+                    return NestedListItem::new(c).selected();
+                }
+                NestedListItem::new(c)
+            })
+            .collect();
 
         print_text_with_coordinates(
-            Text::new(format!("Containers ({})", self.containers.len())),
+            Text::new(format!("Search > {}", self.search_query)),
             0,
             0,
             None,
             None,
         );
-        print_nested_list_with_coordinates(items, 1, 1, None, None);
+
+        print_text_with_coordinates(
+            Text::new(format!("Containers ({})", self.containers.len())),
+            0,
+            2,
+            None,
+            None,
+        );
+        print_nested_list_with_coordinates(items, 1, 3, None, None);
         print_help(rows);
     }
 }
@@ -112,16 +245,10 @@ struct KeyBindHelp {
 
 fn print_help(rows: usize) {
     let prefix = "Help: ";
-    let bindings = vec![
-        KeyBindHelp {
-            key: String::from("q"),
-            description: String::from("Quit"),
-        },
-        KeyBindHelp {
-            key: String::from("r"),
-            description: String::from("Refresh"),
-        },
-    ];
+    let bindings = vec![KeyBindHelp {
+        key: String::from("Ctrl-r"),
+        description: String::from("Refresh"),
+    }];
 
     let mut color_ranges: Vec<_> = vec![];
     let mut pos: usize = prefix.len();

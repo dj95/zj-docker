@@ -16,3 +16,10 @@ pub fn parse_docker_containers(output: &str) -> Vec<String> {
     }
     containers
 }
+
+pub fn open_container(container: &str) {
+    open_command_pane(CommandToRun::new_with_args(
+        "docker",
+        vec!["logs", "-f", container],
+    ));
+}
