@@ -7,6 +7,7 @@ mod docker;
 #[derive(Default)]
 struct State {
     error_message: Option<String>,
+    init: bool,
     containers: Vec<String>,
     containers_loading: bool,
     userspace_configuration: BTreeMap<String, String>,
@@ -20,6 +21,7 @@ impl ZellijPlugin for State {
 
         self.containers = vec![];
         self.containers_loading = false;
+        self.init = false;
 
         // we need the ReadApplicationState permission to receive the ModeUpdate and TabUpdate
         // events
@@ -82,14 +84,22 @@ impl ZellijPlugin for State {
             return;
         }
 
-        if self.containers.is_empty() && !self.containers_loading {
+        if !self.init && !self.containers_loading {
             eprintln!("Loading containers...");
             docker::request_docker_containers();
             self.containers_loading = true;
+            self.init = true;
         }
 
         let items: Vec<NestedListItem> = self.containers.iter().map(NestedListItem::new).collect();
 
+        print_text_with_coordinates(
+            Text::new(format!("Containers ({})", self.containers.len())),
+            0,
+            0,
+            None,
+            None,
+        );
         print_nested_list_with_coordinates(items, 1, 1, None, None);
         print_help(rows);
     }
