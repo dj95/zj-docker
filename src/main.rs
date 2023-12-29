@@ -68,6 +68,8 @@ impl ZellijPlugin for State {
                     docker::parse_docker_containers(std::str::from_utf8(&stdout).unwrap());
                 self.containers_loading = false;
                 self.error_message = None;
+                self.selected_container = None;
+
                 should_render = true;
             }
             Event::Key(key) => match key {
