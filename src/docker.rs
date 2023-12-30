@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, HashMap},
+};
 
 use zellij_tile::prelude::*;
 
@@ -33,6 +36,19 @@ pub fn parse_docker_containers(output: &str) -> Vec<Container> {
             running: container["State"] == "running",
         });
     }
+
+    containers.sort_by(|a, b| {
+        if a.running == b.running {
+            return Ordering::Equal;
+        }
+
+        if a.running && !b.running {
+            return Ordering::Less;
+        } else {
+            return Ordering::Greater;
+        }
+    });
+
     containers
 }
 
@@ -41,6 +57,12 @@ pub fn open_container(container: &str) {
         "docker",
         vec!["logs", "-f", container],
     ));
+}
+
+pub fn start_container(container: &str) {
+    let context: BTreeMap<String, String> =
+        BTreeMap::from([("command".to_owned(), "start".to_owned())]);
+    run_command(&["docker", "start", container], context);
 }
 
 pub fn close_container(container: &str) {

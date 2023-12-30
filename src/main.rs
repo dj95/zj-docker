@@ -56,6 +56,10 @@ impl ZellijPlugin for State {
                     return true;
                 }
 
+                if context.get("command") == Some(&"start".to_owned()) {
+                    docker::request_docker_containers();
+                    return false;
+                }
                 if context.get("command") == Some(&"stop".to_owned()) {
                     docker::request_docker_containers();
                     return false;
@@ -120,6 +124,11 @@ impl ZellijPlugin for State {
                 Key::Ctrl('r') => {
                     docker::request_docker_containers();
                     self.containers_loading = true;
+                }
+                Key::Ctrl('e') => {
+                    if let Some(ref container) = self.selected_container {
+                        docker::start_container(container);
+                    }
                 }
                 Key::Ctrl('c') => {
                     if let Some(ref container) = self.selected_container {
@@ -241,14 +250,33 @@ impl ZellijPlugin for State {
 
         eprintln!("Selected container: {:?}", self.selected_container);
 
-        let items: Vec<NestedListItem> = self
+        let running_items: Vec<NestedListItem> = self
             .filtered_containers
             .iter()
-            .map(|c| {
-                if *c.name == selected_container {
-                    return NestedListItem::new(&c.name).selected();
+            .filter_map(|c| {
+                if !c.running {
+                    return None;
                 }
-                NestedListItem::new(&c.name)
+
+                if *c.name == selected_container {
+                    return Some(NestedListItem::new(&c.name).selected());
+                }
+                Some(NestedListItem::new(&c.name))
+            })
+            .collect();
+
+        let stopped_items: Vec<NestedListItem> = self
+            .filtered_containers
+            .iter()
+            .filter_map(|c| {
+                if c.running {
+                    return None;
+                }
+
+                if *c.name == selected_container {
+                    return Some(NestedListItem::new(&c.name).selected());
+                }
+                Some(NestedListItem::new(&c.name))
             })
             .collect();
 
@@ -260,14 +288,17 @@ impl ZellijPlugin for State {
             None,
         );
 
+        let len = running_items.len();
+        print_text_with_coordinates(Text::new(format!("Containers ({})", len)), 0, 2, None, None);
+        print_nested_list_with_coordinates(running_items.clone(), 1, 3, None, None);
         print_text_with_coordinates(
-            Text::new(format!("Containers ({})", self.containers.len())),
+            Text::new(format!("Stopped Containers ({})", stopped_items.len())),
             0,
-            2,
+            4 + len,
             None,
             None,
         );
-        print_nested_list_with_coordinates(items, 1, 3, None, None);
+        print_nested_list_with_coordinates(stopped_items, 1, 5 + len, None, None);
         print_help(rows);
     }
 }
@@ -287,6 +318,10 @@ fn print_help(rows: usize) {
         KeyBindHelp {
             key: String::from("Ctrl-c"),
             description: String::from("Stop"),
+        },
+        KeyBindHelp {
+            key: String::from("Ctrl-e"),
+            description: String::from("Start"),
         },
     ];
 
