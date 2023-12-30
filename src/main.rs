@@ -250,35 +250,39 @@ impl ZellijPlugin for State {
 
         eprintln!("Selected container: {:?}", self.selected_container);
 
-        let running_items: Vec<NestedListItem> = self
-            .filtered_containers
-            .iter()
-            .filter_map(|c| {
-                if !c.running {
-                    return None;
-                }
+        let mut running_items = Table::new();
+        let mut running_items_len = 0;
+        for container in &self.filtered_containers {
+            if !container.running {
+                continue;
+            }
 
-                if *c.name == selected_container {
-                    return Some(NestedListItem::new(&c.name).selected());
-                }
-                Some(NestedListItem::new(&c.name))
-            })
-            .collect();
+            let mut row = container.to_table_row();
 
-        let stopped_items: Vec<NestedListItem> = self
-            .filtered_containers
-            .iter()
-            .filter_map(|c| {
-                if c.running {
-                    return None;
-                }
+            if container.name == selected_container {
+                row = row.iter().map(|t| t.clone().selected()).collect();
+            }
 
-                if *c.name == selected_container {
-                    return Some(NestedListItem::new(&c.name).selected());
-                }
-                Some(NestedListItem::new(&c.name))
-            })
-            .collect();
+            running_items = running_items.add_styled_row(row);
+            running_items_len += 1;
+        }
+
+        let mut stopped_items = Table::new();
+        let mut stopped_items_len = 0;
+        for container in &self.filtered_containers {
+            if container.running {
+                continue;
+            }
+
+            let mut row = container.to_table_row();
+
+            if container.name == selected_container {
+                row = row.iter().map(|t| t.clone().selected()).collect();
+            }
+
+            stopped_items = stopped_items.add_styled_row(row);
+            stopped_items_len += 1;
+        }
 
         print_text_with_coordinates(
             Text::new(format!("Search > {}", self.search_query)),
@@ -288,17 +292,16 @@ impl ZellijPlugin for State {
             None,
         );
 
-        let len = running_items.len();
-        print_text_with_coordinates(Text::new(format!("Containers ({})", len)), 0, 2, None, None);
-        print_nested_list_with_coordinates(running_items.clone(), 1, 3, None, None);
+        print_text_with_coordinates(Text::new(format!("Containers ({})", running_items_len)), 0, 2, None, None);
+        print_table_with_coordinates(running_items, 1, 3, None, None);
         print_text_with_coordinates(
-            Text::new(format!("Stopped Containers ({})", stopped_items.len())),
+            Text::new(format!("Stopped Containers ({})", stopped_items_len)),
             0,
-            4 + len,
+            4 + running_items_len,
             None,
             None,
         );
-        print_nested_list_with_coordinates(stopped_items, 1, 5 + len, None, None);
+        print_table_with_coordinates(stopped_items, 1, 5 + running_items_len, None, None);
         print_help(rows);
     }
 }

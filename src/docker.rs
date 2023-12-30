@@ -7,15 +7,44 @@ use zellij_tile::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Container {
+    pub id: String,
     pub name: String,
+    pub image: String,
     pub running: bool,
+    pub status: String,
+}
+
+impl ToString for Container {
+    fn to_string(&self) -> String {
+        format!(
+            "{} {}     {} ({})",
+            self.id, self.name, self.image, self.status
+        )
+    }
+}
+
+impl Container {
+    pub fn to_table_row(&self) -> Vec<Text> {
+        vec![
+            Text::new(self.id.clone()),
+            Text::new(" "),
+            Text::new(self.name.clone()),
+            Text::new(" "),
+            Text::new(self.image.clone()),
+            Text::new(" "),
+            Text::new(self.status.clone()),
+        ]
+    }
 }
 
 impl Default for Container {
     fn default() -> Self {
         Self {
+            id: "".to_owned(),
             name: "".to_owned(),
+            image: "".to_owned(),
             running: false,
+            status: "".to_owned(),
         }
     }
 }
@@ -32,8 +61,12 @@ pub fn parse_docker_containers(output: &str) -> Vec<Container> {
     for line in output.lines() {
         let container: HashMap<String, String> = serde_json::from_str(line).unwrap();
         containers.push(Container {
+            id: container["ID"].to_owned(),
             name: container["Names"].to_owned(),
+            image: container["Image"].to_owned(),
             running: container["State"] == "running",
+            status: container["Status"].to_owned(),
+            ..Default::default()
         });
     }
 
