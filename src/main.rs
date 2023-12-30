@@ -56,6 +56,10 @@ impl ZellijPlugin for State {
                     return true;
                 }
 
+                if context.get("command") == Some(&"start".to_owned()) {
+                    docker::request_docker_containers();
+                    return false;
+                }
                 if context.get("command") == Some(&"stop".to_owned()) {
                     docker::request_docker_containers();
                     return false;
@@ -68,6 +72,8 @@ impl ZellijPlugin for State {
                     docker::parse_docker_containers(std::str::from_utf8(&stdout).unwrap());
                 self.containers_loading = false;
                 self.error_message = None;
+                self.selected_container = None;
+
                 should_render = true;
             }
             Event::Key(key) => match key {
@@ -118,6 +124,11 @@ impl ZellijPlugin for State {
                 Key::Ctrl('r') => {
                     docker::request_docker_containers();
                     self.containers_loading = true;
+                }
+                Key::Ctrl('e') => {
+                    if let Some(ref container) = self.selected_container {
+                        docker::start_container(container);
+                    }
                 }
                 Key::Ctrl('c') => {
                     if let Some(ref container) = self.selected_container {
@@ -238,16 +249,39 @@ impl ZellijPlugin for State {
 
         eprintln!("Selected container: {:?}", self.selected_container);
 
-        let items: Vec<NestedListItem> = self
-            .filtered_containers
-            .iter()
-            .map(|c| {
-                if *c.name == selected_container {
-                    return NestedListItem::new(&c.name).selected();
-                }
-                NestedListItem::new(&c.name)
-            })
-            .collect();
+        let mut running_items = Table::new();
+        let mut running_items_len = 0;
+        for container in &self.filtered_containers {
+            if !container.running {
+                continue;
+            }
+
+            let mut row = container.to_table_row();
+
+            if container.name == selected_container {
+                row = row.iter().map(|t| t.clone().selected()).collect();
+            }
+
+            running_items = running_items.add_styled_row(row);
+            running_items_len += 1;
+        }
+
+        let mut stopped_items = Table::new();
+        let mut stopped_items_len = 0;
+        for container in &self.filtered_containers {
+            if container.running {
+                continue;
+            }
+
+            let mut row = container.to_table_row();
+
+            if container.name == selected_container {
+                row = row.iter().map(|t| t.clone().selected()).collect();
+            }
+
+            stopped_items = stopped_items.add_styled_row(row);
+            stopped_items_len += 1;
+        }
 
         print_text_with_coordinates(
             Text::new(format!("Search > {}", self.search_query)),
@@ -257,14 +291,16 @@ impl ZellijPlugin for State {
             None,
         );
 
+        print_text_with_coordinates(Text::new(format!("Containers ({})", running_items_len)), 0, 2, None, None);
+        print_table_with_coordinates(running_items, 1, 3, None, None);
         print_text_with_coordinates(
-            Text::new(format!("Containers ({})", self.containers.len())),
+            Text::new(format!("Stopped Containers ({})", stopped_items_len)),
             0,
-            2,
+            4 + running_items_len,
             None,
             None,
         );
-        print_nested_list_with_coordinates(items, 1, 3, None, None);
+        print_table_with_coordinates(stopped_items, 1, 5 + running_items_len, None, None);
         print_help(rows);
     }
 }
@@ -284,6 +320,10 @@ fn print_help(rows: usize) {
         KeyBindHelp {
             key: String::from("Ctrl-c"),
             description: String::from("Stop"),
+        },
+        KeyBindHelp {
+            key: String::from("Ctrl-e"),
+            description: String::from("Start"),
         },
     ];
 
