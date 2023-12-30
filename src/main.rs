@@ -221,11 +221,10 @@ impl ZellijPlugin for State {
                     None => String::from(""),
                 });
 
-        if self
+        if !self
             .filtered_containers
             .iter()
-            .find(|c| c.name == selected_container)
-            .is_none()
+            .any(|c| c.name == selected_container)
         {
             selected_container = match self.filtered_containers.first().cloned() {
                 Some(container) => container.name.to_owned(),
