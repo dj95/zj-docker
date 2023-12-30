@@ -182,127 +182,129 @@ impl ZellijPlugin for State {
             return;
         }
 
-        if !self.search_query.is_empty() {
-            let mapped_containers = self
-                .containers
-                .iter()
-                .map(|c| c.name.as_ref())
-                .collect::<Vec<&str>>();
-
-            let mut filtered_containers = fuzzy_search(&self.search_query, &mapped_containers);
-
-            filtered_containers.sort_by(|(_, a_score), (_, b_score)| {
-                a_score
-                    .partial_cmp(b_score)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
-
-            filtered_containers.reverse();
-
-            let filtered_containers = filtered_containers
-                .iter()
-                .filter(|(_, score)| *score > 0.0)
-                .map(|(c, _)| c.to_string())
-                .collect::<Vec<String>>();
-
-            self.filtered_containers = self
-                .containers
-                .clone()
-                .into_iter()
-                .filter(|c| filtered_containers.contains(&c.name))
-                .collect();
-
-            eprintln!("Filtered containers: {:?}", filtered_containers);
-        } else {
-            self.filtered_containers = self.containers.clone();
-        }
+        self.filtered_containers = filtered_containers(self.containers.clone(), &self.search_query);
 
         if !self.init && !self.containers_loading {
-            eprintln!("Loading containers...");
             docker::request_docker_containers();
             self.containers_loading = true;
             self.init = true;
         }
 
-        let mut selected_container =
-            self.selected_container
-                .clone()
-                .unwrap_or(match self.filtered_containers.first() {
-                    Some(container) => container.name.to_owned(),
-                    None => String::from(""),
-                });
-
-        if !self
-            .filtered_containers
-            .iter()
-            .any(|c| c.name == selected_container)
-        {
-            selected_container = match self.filtered_containers.first().cloned() {
-                Some(container) => container.name.to_owned(),
-                None => String::from(""),
-            };
-        }
-
-        if self.selected_container.is_none() && !selected_container.is_empty() {
-            self.selected_container = Some(selected_container.clone());
-        }
-
-        eprintln!("Selected container: {:?}", self.selected_container);
-
-        let mut running_items = Table::new();
-        let mut running_items_len = 0;
-        for container in &self.filtered_containers {
-            if !container.running {
-                continue;
-            }
-
-            let mut row = container.to_table_row();
-
-            if container.name == selected_container {
-                row = row.iter().map(|t| t.clone().selected()).collect();
-            }
-
-            running_items = running_items.add_styled_row(row);
-            running_items_len += 1;
-        }
-
-        let mut stopped_items = Table::new();
-        let mut stopped_items_len = 0;
-        for container in &self.filtered_containers {
-            if container.running {
-                continue;
-            }
-
-            let mut row = container.to_table_row();
-
-            if container.name == selected_container {
-                row = row.iter().map(|t| t.clone().selected()).collect();
-            }
-
-            stopped_items = stopped_items.add_styled_row(row);
-            stopped_items_len += 1;
-        }
+        self.selected_container =
+            get_selected_container(&self.selected_container, &self.filtered_containers);
 
         print_text_with_coordinates(
-            Text::new(format!("Search > {}", self.search_query)),
+            Text::new(format!("Search > {}│", self.search_query)),
             0,
             0,
             None,
             None,
         );
 
-        print_text_with_coordinates(Text::new(format!("Containers ({})", running_items_len)), 0, 2, None, None);
-        print_table_with_coordinates(running_items, 1, 3, None, None);
+        let (running_items, running_items_len) =
+            get_running_table_with_size(&self.filtered_containers, &self.selected_container, true);
+        print_text_with_coordinates(
+            Text::new(format!("Containers ({})", running_items_len)),
+            0,
+            2,
+            None,
+            None,
+        );
+        print_table_with_coordinates(running_items, 2, 3, None, None);
+
+        let (stopped_items, stopped_items_len) =
+            get_running_table_with_size(&self.filtered_containers, &self.selected_container, false);
         print_text_with_coordinates(
             Text::new(format!("Stopped Containers ({})", stopped_items_len)),
             0,
-            4 + running_items_len,
+            4 + running_items_len + 1,
             None,
             None,
         );
-        print_table_with_coordinates(stopped_items, 1, 5 + running_items_len, None, None);
+        print_table_with_coordinates(stopped_items, 2, 5 + running_items_len + 1, None, None);
+
         print_help(rows);
     }
+}
+
+fn get_running_table_with_size(
+    filtered_containers: &Vec<Container>,
+    selected_container: &Option<String>,
+    active: bool,
+) -> (Table, usize) {
+    let mut running_items = Table::new();
+    let mut running_items_len = 0;
+
+    running_items =
+        running_items.add_row(["ID", " ", "Name", " ", "Image", " ", "Status"].to_vec());
+
+    for container in filtered_containers {
+        if container.running != active {
+            continue;
+        }
+
+        let mut row = container.to_table_row();
+
+        if Some(container.name.clone()) == *selected_container {
+            row = row.iter().map(|t| t.clone().selected()).collect();
+        }
+
+        running_items = running_items.add_styled_row(row);
+        running_items_len += 1;
+    }
+
+    (running_items, running_items_len)
+}
+
+fn get_selected_container(
+    selected_container: &Option<String>,
+    filtered_containers: &Vec<Container>,
+) -> Option<String> {
+    if selected_container.is_none() && !filtered_containers.is_empty() {
+        return filtered_containers.first().map(|c| c.name.clone());
+    }
+
+    if !filtered_containers
+        .iter()
+        .any(|c| Some(c.name.clone()) == *selected_container)
+    {
+        return filtered_containers.first().map(|c| c.name.clone());
+    }
+
+    selected_container.clone()
+}
+
+fn filtered_containers(containers: Vec<Container>, search_query: &str) -> Vec<Container> {
+    if search_query.is_empty() {
+        return containers;
+    }
+
+    let mapped_containers = containers
+        .iter()
+        .map(|c| c.name.as_ref())
+        .collect::<Vec<&str>>();
+
+    let mut filtered_containers = fuzzy_search(search_query, &mapped_containers);
+
+    filtered_containers.sort_by(|(_, a_score), (_, b_score)| {
+        a_score
+            .partial_cmp(b_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    filtered_containers.reverse();
+
+    let filtered_containers = filtered_containers
+        .iter()
+        .filter(|(_, score)| *score > 0.0)
+        .map(|(c, _)| c.to_string())
+        .collect::<Vec<String>>();
+
+    containers
+        .clone()
+        .into_iter()
+        .filter(|c| filtered_containers.contains(&c.name))
+        .collect()
 }
 
 struct KeyBindHelp {

@@ -66,7 +66,6 @@ pub fn parse_docker_containers(output: &str) -> Vec<Container> {
             image: container["Image"].to_owned(),
             running: container["State"] == "running",
             status: container["Status"].to_owned(),
-            ..Default::default()
         });
     }
 
@@ -76,9 +75,9 @@ pub fn parse_docker_containers(output: &str) -> Vec<Container> {
         }
 
         if a.running && !b.running {
-            return Ordering::Less;
+            Ordering::Less
         } else {
-            return Ordering::Greater;
+            Ordering::Greater
         }
     });
 
