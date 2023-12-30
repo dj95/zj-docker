@@ -318,6 +318,10 @@ fn print_help(rows: usize) {
             description: String::from("Refresh"),
         },
         KeyBindHelp {
+            key: String::from("Enter"),
+            description: String::from("Follow Logs"),
+        },
+        KeyBindHelp {
             key: String::from("Ctrl-c"),
             description: String::from("Stop"),
         },
