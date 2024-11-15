@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 ansi_term = "0.12.1"
-zellij-tile = "0.39.0"
-chrono = "0.4.0"
-serde_json = "1.0.108"
+zellij-tile = "0.41.1"
+chrono = "0.4.38"
+serde_json = "1.0.132"
 rust-fuzzy-search = "0.1.1"

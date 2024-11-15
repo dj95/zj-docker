@@ -2,7 +2,7 @@ bench:
   cargo wasi bench --features bench -- --color always | grep --color=never -v "Criterion.rs ERROR"
 
 run: build
-    zellij -l ./plugin-dev-workspace.kdl -s zj-docker-compose-dev
+    zellij plugin --skip-plugin-cache -- file:./target/wasm32-wasi/debug/zj-docker.wasm
 
 build:
   cargo build

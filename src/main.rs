@@ -76,8 +76,8 @@ impl ZellijPlugin for State {
 
                 should_render = true;
             }
-            Event::Key(key) => match key {
-                Key::Up => {
+            Event::Key(key) => match key.bare_key {
+                BareKey::Up => {
                     let container_index = self
                         .filtered_containers
                         .iter()
@@ -98,7 +98,7 @@ impl ZellijPlugin for State {
 
                     should_render = true;
                 }
-                Key::Down => {
+                BareKey::Down => {
                     let container_index = self
                         .filtered_containers
                         .iter()
@@ -121,21 +121,21 @@ impl ZellijPlugin for State {
 
                     should_render = true;
                 }
-                Key::Ctrl('r') => {
+                BareKey::Char('r') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
                     docker::request_docker_containers();
                     self.containers_loading = true;
                 }
-                Key::Ctrl('e') => {
+                BareKey::Char('e') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
                     if let Some(ref container) = self.selected_container {
                         docker::start_container(container);
                     }
                 }
-                Key::Ctrl('c') => {
+                BareKey::Char('c') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
                     if let Some(ref container) = self.selected_container {
                         docker::close_container(container);
                     }
                 }
-                Key::Backspace => {
+                BareKey::Backspace => {
                     if self.search_query.is_empty() {
                         return false;
                     }
@@ -148,17 +148,20 @@ impl ZellijPlugin for State {
 
                     should_render = true;
                 }
-                Key::Char(c) => match c {
-                    '\n' => {
-                        if let Some(ref container) = self.selected_container {
-                            docker::open_container(container);
-                        }
+                BareKey::Enter => {
+                    if let Some(ref container) = self.selected_container {
+                        docker::open_container(container);
                     }
+                }
+                BareKey::Char(c) => match c {
                     _ => {
                         self.search_query = self.search_query.clone() + &c.to_string();
                         should_render = true;
                     }
                 },
+                BareKey::Esc => {
+                    close_self();
+                }
                 _ => {
                     eprintln!("Key pressed: {:?}", key);
                 }
@@ -330,6 +333,10 @@ fn print_help(rows: usize) {
         KeyBindHelp {
             key: String::from("Ctrl-e"),
             description: String::from("Start"),
+        },
+        KeyBindHelp {
+            key: String::from("Esc"),
+            description: String::from("Close"),
         },
     ];
 

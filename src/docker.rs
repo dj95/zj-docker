@@ -88,7 +88,7 @@ pub fn open_container(container: &str) {
     open_command_pane(CommandToRun::new_with_args(
         "docker",
         vec!["logs", "-f", container],
-    ));
+    ), BTreeMap::new());
 }
 
 pub fn start_container(container: &str) {
