@@ -162,12 +162,10 @@ impl ZellijPlugin for State {
                         docker::open_container(container);
                     }
                 }
-                BareKey::Char(c) => match c {
-                    _ => {
-                        self.search_query = self.search_query.clone() + &c.to_string();
-                        should_render = true;
-                    }
-                },
+                BareKey::Char(c) => {
+                    self.search_query = self.search_query.clone() + &c.to_string();
+                    should_render = true;
+                }
                 BareKey::Esc => {
                     close_self();
                 }

@@ -1,6 +1,7 @@
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, HashMap},
+    fmt::Display,
 };
 
 use zellij_tile::prelude::*;
@@ -14,14 +15,24 @@ pub struct Container {
     pub status: String,
 }
 
-impl ToString for Container {
-    fn to_string(&self) -> String {
-        format!(
+impl Display for Container {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
             "{} {}     {} ({})",
             self.id, self.name, self.image, self.status
         )
     }
 }
+
+// impl ToString for Container {
+//     fn to_string(&self) -> String {
+//         format!(
+//             "{} {}     {} ({})",
+//             self.id, self.name, self.image, self.status
+//         )
+//     }
+// }
 
 impl Container {
     pub fn to_table_row(&self) -> Vec<Text> {
