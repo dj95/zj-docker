@@ -25,15 +25,6 @@ impl Display for Container {
     }
 }
 
-// impl ToString for Container {
-//     fn to_string(&self) -> String {
-//         format!(
-//             "{} {}     {} ({})",
-//             self.id, self.name, self.image, self.status
-//         )
-//     }
-// }
-
 impl Container {
     pub fn to_table_row(&self) -> Vec<Text> {
         vec![
