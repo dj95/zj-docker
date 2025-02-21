@@ -85,16 +85,22 @@ pub fn parse_docker_containers(output: &str) -> Vec<Container> {
 }
 
 pub fn open_container(container: &str) {
-    open_command_pane(CommandToRun::new_with_args(
-        "docker",
-        vec!["logs", "-f", container],
-    ), BTreeMap::new());
+    open_command_pane(
+        CommandToRun::new_with_args("docker", vec!["logs", "-f", container]),
+        BTreeMap::new(),
+    );
 }
 
 pub fn start_container(container: &str) {
     let context: BTreeMap<String, String> =
         BTreeMap::from([("command".to_owned(), "start".to_owned())]);
     run_command(&["docker", "start", container], context);
+}
+
+pub fn delete_container(container: &str) {
+    let context: BTreeMap<String, String> =
+        BTreeMap::from([("command".to_owned(), "delete".to_owned())]);
+    run_command(&["docker", "rm", container], context);
 }
 
 pub fn close_container(container: &str) {

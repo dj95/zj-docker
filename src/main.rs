@@ -64,6 +64,10 @@ impl ZellijPlugin for State {
                     docker::request_docker_containers();
                     return false;
                 }
+                if context.get("command") == Some(&"delete".to_owned()) {
+                    docker::request_docker_containers();
+                    return false;
+                }
                 if context.get("command") != Some(&"ps".to_owned()) {
                     return false;
                 }
@@ -128,6 +132,11 @@ impl ZellijPlugin for State {
                 BareKey::Char('e') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
                     if let Some(ref container) = self.selected_container {
                         docker::start_container(container);
+                    }
+                }
+                BareKey::Char('d') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
+                    if let Some(ref container) = self.selected_container {
+                        docker::delete_container(container);
                     }
                 }
                 BareKey::Char('c') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
@@ -261,7 +270,7 @@ fn get_running_table_with_size(
 
 fn get_selected_container(
     selected_container: &Option<String>,
-    filtered_containers: &Vec<Container>,
+    filtered_containers: &[Container],
 ) -> Option<String> {
     if selected_container.is_none() && !filtered_containers.is_empty() {
         return filtered_containers.first().map(|c| c.name.clone());
@@ -317,7 +326,7 @@ struct KeyBindHelp {
 
 fn print_help(rows: usize) {
     let prefix = "Help: ";
-    let bindings = vec![
+    let bindings = [
         KeyBindHelp {
             key: String::from("Ctrl-r"),
             description: String::from("Refresh"),
@@ -333,6 +342,10 @@ fn print_help(rows: usize) {
         KeyBindHelp {
             key: String::from("Ctrl-e"),
             description: String::from("Start"),
+        },
+        KeyBindHelp {
+            key: String::from("Ctrl-d"),
+            description: String::from("Delete"),
         },
         KeyBindHelp {
             key: String::from("Esc"),
